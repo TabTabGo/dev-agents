@@ -40,13 +40,27 @@ cp -r .claude/agents/* "$CLAUDE_DIR/agents/"
 echo "  ✓ Agents copied to $CLAUDE_DIR/agents/"
 
 # Copy skills
-if [ -d "skills" ] && [ "$(ls -A skills 2>/dev/null)" ]; then
-    echo -e "${YELLOW}Copying skills...${NC}"
-    cp -r skills/* "$CLAUDE_DIR/skills/"
-    echo "  ✓ Skills copied to $CLAUDE_DIR/skills/"
+echo -e "${YELLOW}Copying BA agent skills...${NC}"
+if [ -d ".claude/skills/ba-agent" ]; then
+    mkdir -p "$CLAUDE_DIR/skills/ba-agent"
+    cp -r .claude/skills/ba-agent/* "$CLAUDE_DIR/skills/ba-agent/"
+    echo "  ✓ BA agent skills copied to $CLAUDE_DIR/skills/ba-agent/"
+
+    # List installed skills
+    echo -e "${GREEN}Installed skills:${NC}"
+    for skill_dir in .claude/skills/ba-agent/*; do
+        if [ -d "$skill_dir" ]; then
+            skill_name=$(basename "$skill_dir")
+            echo "    - $skill_name"
+        fi
+    done
 else
-    echo "  ℹ No skills to copy"
+    echo "  ℹ No skills directory found"
 fi
+
+# Create docs directory for skill outputs
+mkdir -p "$TARGET_PATH/docs"
+echo "  ✓ Created docs directory for skill outputs"
 
 # Copy shared patterns as reference (optional)
 echo -e "${YELLOW}Would you like to copy shared patterns? (y/n)${NC}"
