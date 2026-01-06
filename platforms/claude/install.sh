@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Claude Code Installation Script
-# Copies Claude agents and skills to target project
+# Copies Claude agents and skills to target project or ~/.claude
 
 set -e  # Exit on error
 
@@ -11,26 +11,58 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
+# Detect OS
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)     echo "Linux";;
+        Darwin*)    echo "macOS";;
+        CYGWIN*|MINGW*|MSYS*) echo "Windows";;
+        *)          echo "Unknown";;
+    esac
+}
+
+OS=$(detect_os)
+echo -e "${GREEN}Detected OS: $OS${NC}"
+
 # Check if target path is provided
 if [ -z "$1" ]; then
-    echo -e "${RED}Error: Target project path required${NC}"
-    echo "Usage: ./install.sh /path/to/project"
-    exit 1
-fi
+    echo -e "${YELLOW}No project path provided.${NC}"
+    echo -e "${YELLOW}Install to root Claude folder (~/.claude)? (y/n)${NC}"
+    read -r INSTALL_ROOT
 
-TARGET_PATH="$1"
+    if [ "$INSTALL_ROOT" = "y" ] || [ "$INSTALL_ROOT" = "Y" ]; then
+        TARGET_PATH="$HOME/.claude"
+        IS_ROOT_INSTALL=true
+        echo -e "${GREEN}Installing to: $TARGET_PATH${NC}"
+    else
+        echo -e "${RED}Installation cancelled.${NC}"
+        echo "Usage: ./install.sh [/path/to/project]"
+        echo "  - Provide a path to install to a specific project"
+        echo "  - Or run without arguments to install to ~/.claude"
+        exit 1
+    fi
+else
+    TARGET_PATH="$1"
+    IS_ROOT_INSTALL=false
 
-# Validate target path exists
-if [ ! -d "$TARGET_PATH" ]; then
-    echo -e "${RED}Error: Target path does not exist: $TARGET_PATH${NC}"
-    exit 1
+    # Validate target path exists
+    if [ ! -d "$TARGET_PATH" ]; then
+        echo -e "${RED}Error: Target path does not exist: $TARGET_PATH${NC}"
+        exit 1
+    fi
 fi
 
 echo -e "${GREEN}Installing Claude Code agents and skills...${NC}"
 echo "Target: $TARGET_PATH"
 
 # Create .claude directory if it doesn't exist
-CLAUDE_DIR="$TARGET_PATH/.claude"
+# For root install, TARGET_PATH is already ~/.claude, so don't nest it
+if [ "$IS_ROOT_INSTALL" = true ]; then
+    CLAUDE_DIR="$TARGET_PATH"
+else
+    CLAUDE_DIR="$TARGET_PATH/.claude"
+fi
+
 mkdir -p "$CLAUDE_DIR/agents"
 mkdir -p "$CLAUDE_DIR/skills"
 
@@ -58,16 +90,18 @@ else
     echo "  ℹ No skills directory found"
 fi
 
-# Create docs directory for skill outputs
-mkdir -p "$TARGET_PATH/docs"
-echo "  ✓ Created docs directory for skill outputs"
+# Create docs directory for skill outputs (only for project installs)
+if [ "$IS_ROOT_INSTALL" = false ]; then
+    mkdir -p "$TARGET_PATH/docs"
+    echo "  ✓ Created docs directory for skill outputs"
+fi
 
 # Copy shared patterns as reference (optional)
 echo -e "${YELLOW}Would you like to copy shared patterns? (y/n)${NC}"
 read -r COPY_PATTERNS
 
 if [ "$COPY_PATTERNS" = "y" ] || [ "$COPY_PATTERNS" = "Y" ]; then
-    PATTERNS_DIR="$TARGET_PATH/.claude/patterns"
+    PATTERNS_DIR="$CLAUDE_DIR/patterns"
     mkdir -p "$PATTERNS_DIR"
     cp -r ../../shared/patterns/* "$PATTERNS_DIR/"
     echo "  ✓ Patterns copied to $PATTERNS_DIR/"
@@ -112,9 +146,19 @@ EOF
 
 echo -e "${GREEN}✓ Installation complete!${NC}"
 echo ""
-echo "Next steps:"
-echo "  1. cd $TARGET_PATH"
-echo "  2. claude --agent business-analyst"
+
+if [ "$IS_ROOT_INSTALL" = true ]; then
+    echo "Agents and skills installed to: $TARGET_PATH"
+    echo ""
+    echo "These agents and skills are now available globally."
+    echo "Navigate to any project and use:"
+    echo "  claude --agent business-analyst"
+else
+    echo "Next steps:"
+    echo "  1. cd $TARGET_PATH"
+    echo "  2. claude --agent business-analyst"
+fi
+
 echo ""
 echo "Available agents:"
 ls -1 "$CLAUDE_DIR/agents/" | sed 's/^/  - /'
