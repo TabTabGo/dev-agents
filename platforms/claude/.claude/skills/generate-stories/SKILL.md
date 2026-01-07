@@ -1,5 +1,5 @@
 ---
-name: user-stories-generator-azure-devops-integration
+name: generate-stories
 description: Generate comprehensive user stories from FRD and create them in Azure DevOps backlog using ADO MCP connector. Project name from configuration, iteration/sprint from user's request. Use when FRD is approved and ready to populate Azure DevOps with user stories.
 allowed-tools: Read, Write, Bash
 ---

@@ -1,5 +1,5 @@
 ---
-name: requirement-analysis-frd-generation
+name: analyze-requirements
 description: Analyze project requirements and generate comprehensive Functional Requirements Documents (FRD). Use when the user describes a project idea and needs structured requirements analysis with actors, functionalities, and NFRs documented.
 allowed-tools: Read, Write, Grep, Glob
 ---

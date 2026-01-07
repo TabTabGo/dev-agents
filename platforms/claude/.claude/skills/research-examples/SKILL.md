@@ -1,5 +1,5 @@
 ---
-name: similar-examples-finder
+name: research-examples
 description: Search for and analyze similar applications, competitor products, and reference implementations. Use when the user wants to see competitor analysis, industry best practices, or design inspiration before finalizing requirements.
 allowed-tools: WebSearch, WebFetch, Read, Write
 ---

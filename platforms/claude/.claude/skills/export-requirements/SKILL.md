@@ -1,5 +1,5 @@
 ---
-name: requirements-document-generator
+name: export-requirements
 description: Generate professional requirements documents in Microsoft Word (.docx) and PDF formats from FRD. Use when formal documentation is required for stakeholders, regulatory compliance, or external vendor communication.
 allowed-tools: Read, Write, Bash, Skill
 ---

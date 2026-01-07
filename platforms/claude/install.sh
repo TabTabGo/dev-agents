@@ -66,29 +66,54 @@ fi
 mkdir -p "$CLAUDE_DIR/agents"
 mkdir -p "$CLAUDE_DIR/skills"
 
+# Copy all .claude contents
+echo -e "${YELLOW}Copying .claude contents...${NC}"
+
 # Copy agents
-echo -e "${YELLOW}Copying agents...${NC}"
-cp -r .claude/agents/* "$CLAUDE_DIR/agents/"
-echo "  ✓ Agents copied to $CLAUDE_DIR/agents/"
-
-# Copy skills
-echo -e "${YELLOW}Copying BA agent skills...${NC}"
-if [ -d ".claude/skills/ba-agent" ]; then
-    mkdir -p "$CLAUDE_DIR/skills/ba-agent"
-    cp -r .claude/skills/ba-agent/* "$CLAUDE_DIR/skills/ba-agent/"
-    echo "  ✓ BA agent skills copied to $CLAUDE_DIR/skills/ba-agent/"
-
-    # List installed skills
-    echo -e "${GREEN}Installed skills:${NC}"
-    for skill_dir in .claude/skills/ba-agent/*; do
-        if [ -d "$skill_dir" ]; then
-            skill_name=$(basename "$skill_dir")
-            echo "    - $skill_name"
-        fi
-    done
-else
-    echo "  ℹ No skills directory found"
+if [ -d ".claude/agents" ]; then
+    echo "  → Copying agents..."
+    cp -r .claude/agents/* "$CLAUDE_DIR/agents/" 2>/dev/null || true
+    agent_count=$(find "$CLAUDE_DIR/agents" -type f -name "*.md" | wc -l)
+    echo "    ✓ $agent_count agent(s) installed"
 fi
+
+# Copy skills (entire skills directory structure)
+if [ -d ".claude/skills" ]; then
+    echo "  → Copying skills..."
+    # Copy all skills maintaining directory structure
+    cp -r .claude/skills/* "$CLAUDE_DIR/skills/" 2>/dev/null || true
+
+    # Count installed skills
+    skill_count=$(find "$CLAUDE_DIR/skills" -type f -name "SKILL.md" | wc -l)
+    echo "    ✓ $skill_count skill(s) installed"
+
+    # List installed skills with their paths
+    echo -e "${GREEN}Installed skills:${NC}"
+    find "$CLAUDE_DIR/skills" -type f -name "SKILL.md" | while read -r skill_file; do
+        skill_dir=$(dirname "$skill_file")
+        skill_name=$(basename "$skill_dir")
+        relative_path=$(echo "$skill_file" | sed "s|$CLAUDE_DIR/skills/||" | sed 's|/SKILL.md||')
+        echo "    - $relative_path"
+    done
+fi
+
+# Copy any additional .claude contents (prompts, configs, etc.)
+for item in .claude/*; do
+    if [ -e "$item" ]; then
+        basename_item=$(basename "$item")
+        # Skip already copied agents and skills
+        if [ "$basename_item" != "agents" ] && [ "$basename_item" != "skills" ]; then
+            echo "  → Copying $basename_item..."
+            if [ -d "$item" ]; then
+                mkdir -p "$CLAUDE_DIR/$basename_item"
+                cp -r "$item"/* "$CLAUDE_DIR/$basename_item/" 2>/dev/null || true
+            else
+                cp "$item" "$CLAUDE_DIR/" 2>/dev/null || true
+            fi
+            echo "    ✓ $basename_item copied"
+        fi
+    fi
+done
 
 # Create docs directory for skill outputs (only for project installs)
 if [ "$IS_ROOT_INSTALL" = false ]; then
@@ -108,30 +133,48 @@ if [ "$COPY_PATTERNS" = "y" ] || [ "$COPY_PATTERNS" = "Y" ]; then
 fi
 
 # Create a README in the target .claude directory
-cat > "$CLAUDE_DIR/README.md" << 'EOF'
+cat > "$CLAUDE_DIR/README.md" << EOF
 # Claude Code Configuration
 
-This directory contains Claude Code agents and skills for this project.
+This directory contains Claude Code agents, skills, and configurations.
+
+## Installation Summary
+
+Installed on: $(date)
 
 ## Agents
 
 Agents are specialized AI assistants for different roles:
-- `business-analyst.md` - Requirements gathering and specification
-- `backend-agent.md` - Backend development with Clean Architecture + CQRS
+$(find "$CLAUDE_DIR/agents" -type f -name "*.md" -exec basename {} .md \; 2>/dev/null | sed 's/^/- /' || echo "- No agents installed")
 
 ## Skills
 
-Skills are reusable capabilities that can be invoked during development.
+Skills are reusable capabilities that can be invoked during development:
+$(find "$CLAUDE_DIR/skills" -type f -name "SKILL.md" 2>/dev/null | while read -r f; do echo "- $(echo "$f" | sed "s|$CLAUDE_DIR/skills/||" | sed 's|/SKILL.md||')"; done || echo "- No skills installed")
 
 ## Usage
 
-```bash
+### Using Agents
+
+\`\`\`bash
 # Use a specific agent
 claude --agent business-analyst
 
 # List available agents
-ls .claude/agents/
-```
+ls $CLAUDE_DIR/agents/
+\`\`\`
+
+### Using Skills
+
+Skills are invoked automatically based on context, or manually:
+
+\`\`\`bash
+# Example: Invoke skills manually (if available globally)
+/analyze-requirements
+/research-examples
+/generate-stories
+/export-requirements
+\`\`\`
 
 ## Architecture Standards
 
@@ -139,26 +182,84 @@ This project follows:
 - Clean Architecture (4 layers)
 - CQRS with MediatR
 - Test-First Development
-- >80% Code Coverage requirement
+- **>80% Code Coverage requirement**
 
-See patterns directory for templates and examples.
+## Directory Structure
+
+\`\`\`
+.claude/
+├── agents/          # Specialized AI agent definitions
+├── skills/          # Reusable skill implementations
+└── README.md        # This file
+\`\`\`
+
+## Documentation
+
+- Agent instructions are in \`.md\` files under \`agents/\`
+- Skill definitions are in \`SKILL.md\` files under \`skills/\`
+- Generated outputs (FRDs, user stories) will be in \`docs/\` directory
+
+## Support
+
+For issues or questions about these agents and skills:
+- Repository: https://github.com/tabtabgo/dev-agents
+- Documentation: See README.md in the repository root
 EOF
 
 echo -e "${GREEN}✓ Installation complete!${NC}"
 echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${GREEN}Installation Summary${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 if [ "$IS_ROOT_INSTALL" = true ]; then
-    echo "Agents and skills installed to: $TARGET_PATH"
-    echo ""
-    echo "These agents and skills are now available globally."
-    echo "Navigate to any project and use:"
-    echo "  claude --agent business-analyst"
+    echo "📁 Installation Location: $TARGET_PATH (Global)"
+    echo "✓ These agents and skills are now available globally"
 else
-    echo "Next steps:"
-    echo "  1. cd $TARGET_PATH"
-    echo "  2. claude --agent business-analyst"
+    echo "📁 Installation Location: $CLAUDE_DIR"
+    echo "✓ Installed for this project only"
 fi
 
 echo ""
-echo "Available agents:"
-ls -1 "$CLAUDE_DIR/agents/" | sed 's/^/  - /'
+echo "📋 Installed Agents:"
+agent_files=$(find "$CLAUDE_DIR/agents" -type f -name "*.md" 2>/dev/null)
+if [ -n "$agent_files" ]; then
+    echo "$agent_files" | while read -r f; do
+        agent_name=$(basename "$f" .md)
+        echo "   ✓ $agent_name"
+    done
+else
+    echo "   - No agents installed"
+fi
+
+echo ""
+echo "⚡ Installed Skills:"
+skill_files=$(find "$CLAUDE_DIR/skills" -type f -name "SKILL.md" 2>/dev/null)
+if [ -n "$skill_files" ]; then
+    echo "$skill_files" | while read -r f; do
+        skill_path=$(echo "$f" | sed "s|$CLAUDE_DIR/skills/||" | sed 's|/SKILL.md||')
+        echo "   ✓ $skill_path"
+    done
+else
+    echo "   - No skills installed"
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "${YELLOW}Next Steps:${NC}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ "$IS_ROOT_INSTALL" = true ]; then
+    echo "Navigate to any project directory and run:"
+    echo "  $ claude --agent business-analyst"
+else
+    echo "1. Navigate to your project:"
+    echo "   $ cd $TARGET_PATH"
+    echo ""
+    echo "2. Launch an agent:"
+    echo "   $ claude --agent business-analyst"
+fi
+
+echo ""
+echo "📚 Documentation: See $CLAUDE_DIR/README.md"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
