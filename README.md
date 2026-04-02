@@ -12,9 +12,19 @@
 
 ### Using Claude Code
 
-**IMPORTANT**: Claude Code skills are **project-local**, not global plugins. There is no `/plugin install` command. Skills must be physically copied to each project's `.claude/skills/` directory.
+#### Method 0: Install via [skills.sh](https://skills.sh/) (Easiest)
 
-#### Method 1: Automated Installation (Recommended)
+```bash
+# Install all skills to your project
+npx skills add tabtabgo/dev-agents
+
+# Or install globally (available in all projects)
+npx skills add tabtabgo/dev-agents -g
+```
+
+This installs all BA skills automatically. Works with Claude Code, GitHub Copilot, Cursor, and other [skills-compatible agents](https://skills.sh/).
+
+#### Method 1: Automated Installation
 
 ```bash
 # From dev-agents repository
@@ -72,6 +82,11 @@ cd platforms/copilot
 
 ```
 dev-agents/
+├── skills/              # Root-level symlinks for skills.sh discovery
+│   ├── analyze-requirements -> platforms/claude/.claude/skills/...
+│   ├── research-examples -> ...
+│   ├── generate-stories -> ...
+│   └── export-requirements -> ...
 ├── platforms/
 │   ├── claude/
 │   │   ├── .claude/

@@ -12,11 +12,13 @@ This is a multi-platform AI agent framework for automated SDLC (Software Develop
 
 ```
 dev-agents/
+├── skills/              # Root-level symlinks for skills.sh discovery
 ├── platforms/
 │   ├── claude/          # Claude Code agents and skills
 │   │   ├── .claude/agents/   # Agent definitions (.md files)
-│   │   └── skills/           # Reusable skill implementations
+│   │   └── skills/           # Reusable skill implementations (source of truth)
 │   ├── copilot/         # GitHub Copilot configurations
+│   │   └── .github/skills/   # Symlinks to Claude skills for Copilot discovery
 │   ├── shared/          # Platform-agnostic patterns and templates
 │   │   ├── patterns/    # Clean Architecture, CQRS, Test-First
 │   │   ├── templates/   # .NET and React scaffolds
@@ -28,8 +30,12 @@ dev-agents/
 
 ### Claude Code Setup
 ```bash
+# Via skills.sh (recommended)
+npx skills add tabtabgo/dev-agents
+
+# Or via install script
 cd platforms/claude
-./install.sh /path/to/project  # When implemented
+./install.sh /path/to/project
 claude --agent business-analyst
 ```
 

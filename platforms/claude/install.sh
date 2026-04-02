@@ -261,5 +261,7 @@ else
 fi
 
 echo ""
+echo "💡 TIP: You can also install skills via: npx skills add tabtabgo/dev-agents"
+echo ""
 echo "📚 Documentation: See $CLAUDE_DIR/README.md"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

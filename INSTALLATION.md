@@ -4,7 +4,24 @@ This guide explains how to install and use the BA agent skills as a plugin in Cl
 
 ## Installation Methods
 
-### Method 1: Install into Existing Project (Recommended)
+### Method 0: Install via [skills.sh](https://skills.sh/) (Recommended)
+
+The easiest way to install BA Agent skills is via [skills.sh](https://skills.sh/):
+
+```bash
+# Install all skills to your project
+npx skills add tabtabgo/dev-agents
+
+# Install globally (available in all projects)
+npx skills add tabtabgo/dev-agents -g
+
+# Install for a specific agent
+npx skills add tabtabgo/dev-agents --agent copilot
+```
+
+This automatically detects installed agents (Claude Code, GitHub Copilot, Cursor, etc.) and installs all available skills to the correct directory. No manual copying required.
+
+### Method 1: Install into Existing Project
 
 Use the installation script to copy skills to your project:
 
