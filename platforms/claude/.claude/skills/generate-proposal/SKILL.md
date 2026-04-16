@@ -56,8 +56,9 @@ Match sheet names case-insensitively and allow minor variations (`Open Questions
 | Buffer 20% | Buffer days |
 | Total Days | Est. Days + Buffer |
 | Est. Weeks | Total Days converted to weeks |
-| Cost | AED cost, populated on Phase Subtotal rows |
+| Cost | AED cost, populated on Phase Subtotal rows (blank for retainer phases) |
 | Comments | Internal notes — **omit from client-facing output** |
+| Billing Type / Notes (rightmost col) | Retainer indicator on Phase Subtotal rows. When populated with text like `Retainer Based. Monthly 5000`, the phase is billed as a monthly retainer instead of a fixed phase cost. Parse the monthly amount from the string (e.g. `5000` → `AED 5,000 / month`). |
 
 **Row types to recognize:**
 - **Phase header row** — Phase column populated, Task ID empty. Starts a new phase block.
@@ -66,10 +67,33 @@ Match sheet names case-insensitively and allow minor variations (`Open Questions
 - **Phase Subtotal row** — Task column = `Phase N Subtotal`. Contains aggregated Total Days, Est. Weeks, and AED Cost.
 
 The skill must aggregate from the estimate sheet:
-- **Total project days** (sum of all Phase Subtotal Total Days)
+- **Total project days** (sum of all Phase Subtotal Total Days across all phases, fixed and retainer)
 - **Total project weeks**
-- **Total project cost in AED** (sum of all Phase Subtotal Costs)
-- **Per-phase breakdown** (phase name, days, weeks, cost)
+- **Total fixed cost in AED** (sum of Phase Subtotal Costs for non-retainer phases only)
+- **Total monthly retainer in AED** (sum of monthly amounts for retainer phases — surfaced separately, never added to the fixed total)
+- **Per-phase breakdown** — each phase carries:
+  - `name`
+  - `total_days`, `total_weeks`
+  - `billing_type` — `"fixed"` or `"retainer"`
+  - `cost_aed` — fixed price (for `fixed` phases) OR `null` (for `retainer` phases)
+  - `monthly_retainer_aed` — monthly amount (for `retainer` phases) OR `null` (for `fixed` phases)
+  - `retainer_raw_note` — original note text (e.g. `"Retainer Based. Monthly 5000"`) for traceability
+
+**Retainer detection:** if a Phase Subtotal row has the rightmost Billing Type / Notes cell matching `/retainer/i`, mark the phase `billing_type = "retainer"`. Extract the monthly amount with a number regex (e.g. `/(\d[\d,]*(\.\d+)?)/`). If extraction fails, warn the user and set `monthly_retainer_aed = null` with a `{{monthly retainer TBD}}` placeholder.
+
+#### Duration rounding (client-facing only)
+
+All **day** and **week** values shown in the proposal must be rounded to the **nearest whole number** using standard half-up rounding:
+- `2.8 weeks` → `3 weeks`
+- `6.1 weeks` → `6 weeks`
+- `14.0 days` → `14 days`
+- `11.7 days` → `12 days`
+
+Rules:
+- **Rounding applies to display only.** Never round the underlying values before using them in other calculations — compute totals from raw values, then round the final displayed number.
+- **Never round costs.** AED amounts always preserve their exact cents (e.g. `AED 17,199.00`).
+- Apply rounding consistently everywhere a duration appears: Executive Summary headline numbers, Deliverables & Milestones table, Timeline table, Commercials Pricing Summary table, and any narrative prose.
+- When summing rounded per-phase durations, the sum must match the rounded grand total derived from the raw grand total — not the sum of the rounded phase values. If a minor discrepancy occurs, trust the rounded grand total computed from the raw sum and adjust the largest phase's displayed value by ±1 to reconcile.
 
 #### 2b. Open Questions sheet — columns
 
@@ -167,7 +191,19 @@ The proposal follows this structure, but sections should be **adapted to what th
 
 **1. Executive Summary** (Required)
 - 1–2 paragraphs: who we are, what the client needs, what we propose, total investment, total timeline
-- Headline numbers: total AED cost, total weeks, number of phases
+- Headline numbers block: total fixed cost in AED, total monthly retainer in AED (if any), total weeks, number of phases
+- **Per-phase cost breakdown table** summarizing the commercials at a glance:
+
+  | Phase | Duration | Billing | Cost |
+  |-------|----------|---------|------|
+  | Phase 0 — Design & Setup | 3 weeks | Fixed | AED 17,199.00 |
+  | Phase 1 — Core Platform | 5 weeks | Fixed | AED 3,528.00 |
+  | Phase 2 — Retainer Support | 9 weeks | Retainer | AED 5,000.00 / month |
+  | **Total** | **17 weeks** | — | **AED 20,727.00 fixed + AED 5,000.00 / month** |
+
+  - Use rounded weeks (see Duration rounding rules)
+  - For retainer phases, show `Retainer` in Billing column and `AED N,NNN.NN / month` in Cost column — **never a fixed price**
+  - Total row: sum fixed costs and monthly retainers separately. If there are no retainer phases, drop the retainer portion of the total. If every phase is retainer, drop the fixed portion.
 
 **2. Understanding of Requirements**
 - Summarize what the client is asking for, derived from the BRD/RFP/brief
@@ -202,10 +238,16 @@ The proposal follows this structure, but sections should be **adapted to what th
   - One row per phase, totals at bottom
   - Values pulled from Phase Subtotal rows in the estimate
 - **8.2 Detailed Breakdown** — bulleted or table listing of tasks per phase with Est. Days and Total Days (exclude internal columns: Assign to, Comments)
-- **8.3 Payment Schedule** — default template:
-  - 30% on signing
-  - 40% at midpoint milestone
-  - 30% on final delivery and acceptance
+- **8.3 Payment Schedule** — use the following fixed template verbatim:
+
+  > Each phase is invoiced independently on the following milestone schedule:
+  > - 30% on phase kick-off (signed SOW and access provisioning complete)
+  > - 40% at phase submission (typically on start of UAT phase)
+  > - 30% on phase final delivery and written acceptance by Visioneers
+  >
+  > Payment terms: Net 30 days from invoice date.
+
+  Render the bullet items as a proper bulleted list. Replace `Visioneers` only if the user explicitly specifies a different accepting party; otherwise keep it as-is.
 - **8.4 Currency** — AED. All figures formatted as `AED 1,234.56`
 - **8.5 Taxes** — statement on VAT (default: `All amounts are exclusive of applicable VAT`)
 
