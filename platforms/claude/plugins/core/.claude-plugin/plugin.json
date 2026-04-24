@@ -1,0 +1,17 @@
+{
+  "name": "core",
+  "version": "0.1.0",
+  "description": "Core plugin — cross-cutting integrations for Microsoft 365, Azure DevOps, and DevOps rollout planning.",
+  "author": {
+    "name": "tabtabgo",
+    "url": "https://github.com/tabtabgo/dev-agents"
+  },
+  "keywords": [
+    "microsoft-365",
+    "azure-devops",
+    "devops",
+    "rollout",
+    "sharepoint",
+    "teams"
+  ]
+}

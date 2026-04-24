@@ -1,0 +1,17 @@
+{
+  "name": "ba",
+  "version": "0.1.0",
+  "description": "Business Analyst plugin — requirements analysis, user stories, proposals, and BRD/FRD document generation.",
+  "author": {
+    "name": "tabtabgo",
+    "url": "https://github.com/tabtabgo/dev-agents"
+  },
+  "keywords": [
+    "business-analyst",
+    "requirements",
+    "user-stories",
+    "brd",
+    "frd",
+    "proposal"
+  ]
+}
