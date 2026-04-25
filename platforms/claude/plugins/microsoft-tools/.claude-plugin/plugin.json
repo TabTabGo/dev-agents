@@ -1,7 +1,7 @@
 {
-  "name": "core",
+  "name": "microsoft-tools",
   "version": "0.1.0",
-  "description": "Core plugin — cross-cutting integrations for Microsoft 365, Azure DevOps, and DevOps rollout planning.",
+  "description": "Microsoft tools plugin — integrations for Microsoft 365, Azure DevOps, and DevOps rollout planning.",
   "author": {
     "name": "tabtabgo",
     "url": "https://github.com/tabtabgo/dev-agents"
