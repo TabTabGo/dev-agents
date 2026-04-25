@@ -283,6 +283,87 @@ az repos ref unlock --name refs/heads/main --repository {repo} --project {projec
 
 ## Repository Policies
 
+### Main Branch Ruleset (mandatory baseline)
+
+**Every repository must apply this ruleset to `main` (and `master` if it exists):**
+
+- All changes to `main` must go through a Pull Request — direct push is forbidden.
+- Only members of the **Project Administrators** group may push directly or bypass policies (e.g. for emergency hotfixes).
+- Everyone else (Contributors) commits to a feature/release branch and merges via PR.
+
+In Azure DevOps this is enforced by combining **branch policies** (which block non-PR pushes once they are blocking + enabled) with **branch-scoped permissions** (which restrict who may bypass).
+
+```bash
+# Resolve repo + project ids
+PROJECT_ID=$(az devops project show --project {project} --query id -o tsv)
+REPO_ID=$(az repos show --repository {repo} --project {project} --query id -o tsv)
+ADMIN_GROUP_DESCRIPTOR=$(az devops security group list --project {project} \
+  --query "graphGroups[?displayName=='Project Administrators'].descriptor | [0]" -o tsv)
+CONTRIB_GROUP_DESCRIPTOR=$(az devops security group list --project {project} \
+  --query "graphGroups[?displayName=='Contributors'].descriptor | [0]" -o tsv)
+
+# 1. Blocking branch policy: require ≥1 reviewer (this is what forces PR-only flow)
+az repos policy approver-count create \
+  --blocking true --enabled true \
+  --branch main --repository-id "$REPO_ID" \
+  --minimum-approver-count 1 \
+  --creator-vote-counts false \
+  --allow-downvotes false \
+  --reset-on-source-push true
+
+# 2. Require linked work items on every PR
+az repos policy work-item-linking create \
+  --blocking true --enabled true \
+  --branch main --repository-id "$REPO_ID"
+
+# 3. Require all PR comments to be resolved
+az repos policy comment-required create \
+  --blocking true --enabled true \
+  --branch main --repository-id "$REPO_ID"
+
+# 4. Restrict the bypass: only Project Administrators may push to / bypass policies on main
+#    Security namespace "Git Repositories" GUID is fixed: 2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87
+#    Token format for a branch: repoV2/<projectId>/<repoId>/refs/heads/<branch>
+GIT_NS=2e9eb7ed-3c0a-47d4-87c1-0ffdd275fd87
+TOKEN="repoV2/$PROJECT_ID/$REPO_ID/refs/heads/main"
+
+# Deny "Contribute" (push) and "Bypass policies when pushing/completing PR" for Contributors
+# Bit values: Contribute=4, BypassPoliciesPush=128, BypassPoliciesCompletePR=32768
+az devops security permission update \
+  --namespace-id "$GIT_NS" \
+  --subject "$CONTRIB_GROUP_DESCRIPTOR" \
+  --token "$TOKEN" \
+  --deny-bit $((4 + 128 + 32768))
+
+# Allow the same bits for Project Administrators (admins keep push + bypass)
+az devops security permission update \
+  --namespace-id "$GIT_NS" \
+  --subject "$ADMIN_GROUP_DESCRIPTOR" \
+  --token "$TOKEN" \
+  --allow-bit $((4 + 128 + 32768))
+
+# Verify
+az devops security permission show \
+  --namespace-id "$GIT_NS" \
+  --subject "$CONTRIB_GROUP_DESCRIPTOR" \
+  --token "$TOKEN"
+```
+
+Apply the same block to `master` by repeating with `--branch master` and `refs/heads/master` in the token. Apply to long-lived release branches by setting the token to `repoV2/$PROJECT_ID/$REPO_ID/refs/heads/releases` (covers all `releases/*`).
+
+**Permission bit reference for the Git Repositories namespace** (use these in `--allow-bit` / `--deny-bit`):
+
+| Bit   | Name                                     | Effect                                     |
+| ----: | ---------------------------------------- | ------------------------------------------ |
+|     2 | GenericContribute (legacy)               | Read/contribute                            |
+|     4 | Contribute                               | Push commits to the branch                 |
+|     8 | ForcePush                                | Force-push / rewrite history               |
+|    16 | CreateBranch                             | Create branches under the token            |
+|   128 | PolicyExempt (push)                      | Push that bypasses branch policies         |
+| 32768 | BypassPoliciesWhenCompletingPullRequests | Complete a PR ignoring failing policies    |
+
+Combine with `+` as shown above.
+
 ### List All Policies
 
 ```bash
