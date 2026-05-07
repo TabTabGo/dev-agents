@@ -46,7 +46,14 @@ Every command in this skill resolves its target SharePoint site from a per-clien
     "tenantUrl": "https://yourtenant.sharepoint.com",
     "siteName": "Bolignet",
     "teamName": "Bolignet Development",
-    "documentLibrary": "Shared Documents"
+    "documentLibrary": "Shared Documents",
+    "chats": {
+      "Bolignet Team": {
+        "chatId": "19:....@thread.v2",
+        "chatType": "group",
+        "default": true
+      }
+    }
   }
 }
 ```
@@ -55,6 +62,7 @@ Every command in this skill resolves its target SharePoint site from a per-clien
 
 - `webUrl` = `${tenantUrl}/sites/${siteName}` — this is the `--webUrl` argument for every SPO command
 - `folder` = `${documentLibrary}/<phase-dir>` — e.g., `Shared Documents/01-requirements`
+- `chatId` for any named chat = `m365.chats["<friendly name>"].chatId`. The entry with `"default": true` is what bare "notify chat" / "notify group" requests resolve to.
 
 **If `settings.json` is missing or malformed:** stop and ask the user for the site name and tenant URL, then offer to write a `settings.json` stub they can commit.
 
@@ -137,7 +145,92 @@ m365 spo file list \
 
 Add `--recursive` to include subfolders. Use `--output json` whenever an agent will parse the result programmatically — the default output is human-oriented.
 
-### 4. Check auth status
+### 4. Post a message to a Teams chat or channel
+
+Uploading a file is silent — it doesn't notify anyone. To announce a handoff (e.g. "BA Agent finished requirements v1"), post a message.
+
+**Always send as HTML.** Teams chats do **not** render markdown — asterisks and dashes show as raw characters. Use `--contentType html` for every message and convert any markdown the user gives you into HTML (`**bold**` → `<b>bold</b>`, `- item` → `<ul><li>item</li></ul>`, headings → `<h3>`, etc.). Plain text without `--contentType` only works when there's no formatting to render.
+
+**Always linkify trackable IDs.** Teams does NOT auto-link bare numbers or `#1234` text. Whenever a message mentions a work item, PR, commit, or issue, wrap it in `<a href>`. This is non-negotiable for status updates — recipients expect to click. Resolve `{org}` from `.env` (`AZURE_DEVOPS_ORG_URL`) and `{project}` from the client's `settings.json` (`devOpsProjectName`). See `reference/teams-chat.md` § "Linkify identifiers" for the full URL templates. Quick reference:
+
+- Azure DevOps work item: `https://dev.azure.com/{org}/{project}/_workitems/edit/{id}`
+- Azure DevOps PR: `https://dev.azure.com/{org}/{project}/_git/{repo}/pullrequest/{id}`
+
+Build the `<a>` inline as you generate each list item — never print the bare ID first and rely on Teams to fix it.
+
+**Standard work item list format.** When listing work items in a Teams message, every `<li>` must follow this exact shape — no variations:
+
+```
+<li><a href="{workitem-url}">#{id}</a> - <b>{Assignee short name}</b> - {Title}</li>
+```
+
+- `#{id}` is wrapped in `<a href>` pointing to the Azure DevOps work item URL.
+- Assignee is the short name (resolved from `.claude/devops.settings.json` `teamMembers[]`); use `<b>unassigned</b>` if null. Always bold.
+- Title is the raw `System.Title` (HTML-escape `&`, `<`, `>`, `"`).
+- Separator is ` - ` (space-hyphen-space). No emojis, no extra prefixes inside the `<li>`.
+- Group items under section headings (`<h4>`) by state, type, or assignee — but every item line itself must match the format above.
+
+Example:
+
+```html
+<li><a href="https://dev.azure.com/tabtabgo/BoligNet/_workitems/edit/19138">#19138</a> - <b>Sarya</b> - "Await Fulfillment" status for confirmed orders</li>
+```
+
+**Iteration summary format.** When the message is an iteration / sprint / release update (e.g. "v1.8.6 update"), follow these rules in addition to the work item list format above:
+
+- **Do NOT list Closed items.** They clutter the post. List only Active, New, and Resolved (still needs closure) sections. Mention the closed *count* in the summary header but skip the per-item enumeration.
+- **Include a % completed metric** in the summary header. Formula:
+  - `% completed = (Closed + Resolved) / (Total - Removed) × 100`
+  - Removed items are excluded from the denominator (they were dropped from scope).
+  - Resolved items count as done for completion %, even though they still need formal closure.
+- Summary header line should include: total items, % completed, then the breakdown counts.
+
+Example summary header:
+
+```html
+<p><b>Summary:</b> 26 items &nbsp;·&nbsp; <b>67% completed</b> &nbsp;·&nbsp; ✅ Closed: 14 &nbsp;·&nbsp; 🟢 Resolved: 2 &nbsp;·&nbsp; 🟡 Active: 3 &nbsp;·&nbsp; 🆕 New: 5 &nbsp;·&nbsp; ⛔ Removed: 2</p>
+```
+
+#### Group chat / "notify chat" workflow (read-then-write)
+
+When the user asks "notify chat <name>", "post to <name>", or just "notify group", **resolve the chatId from the client's `settings.json` first** — never run `m365 teams chat list` again for a chat that's already registered.
+
+1. Read `~/workspace/<client>/settings.json` → `m365.chats[<name>].chatId`.
+2. If the user said just "notify group" / "notify chat" with no name, use the entry where `"default": true`.
+3. **If the named chat is not in `settings.json`:** ask the user for the chat name (if not already given), run `m365 teams chat list --output json` and filter by `topic` (case-insensitive contains), show matches to the user, get their pick, then **persist it back** into `settings.json` under `m365.chats` before sending. Mark the first registered chat as `"default": true` only with explicit user confirmation.
+4. Send via `m365 teams chat message send --chatId "$CHAT_ID" --message "$HTML" --contentType html`.
+
+```bash
+# Example: notify group chat from settings.json
+CHAT_ID=$(jq -r '.m365.chats["Lisa Team"].chatId' ~/workspace/lisa/settings.json)
+m365 teams chat message send \
+  --chatId "$CHAT_ID" \
+  --contentType html \
+  --message "<h3>v2.2.6 status</h3><ul><li>Closed: <b>30/41</b></li></ul>"
+```
+
+#### Channel post — broadcast to a team
+
+```bash
+m365 teams message send \
+  --teamName "Bolignet Development" \
+  --channelName "General" \
+  --contentType html \
+  --message "<p>📄 <b>Requirements v1</b> is up — <a href='$FILE_URL'>open file</a></p>"
+```
+
+#### Direct chat by email (one-off, no settings.json entry)
+
+```bash
+m365 teams chat message send \
+  --userEmails "alice@tenant.com" \
+  --contentType html \
+  --message "<p>Uploaded the latest design file.</p>"
+```
+
+Cache `teamId` / `channelId` / `chatId` in `settings.json` after first lookup. Full command surface, formatting rules, HTML cheatsheet, and the upload-then-announce pattern: `reference/teams-chat.md`.
+
+### 5. Check auth status
 
 ```bash
 m365 status
@@ -175,6 +268,7 @@ Read these when the situation calls for it — don't load them upfront:
 
 - `reference/auth-setup.md` — First-time Entra app registration, device code login, token refresh, troubleshooting auth
 - `reference/teams-files.md` — Teams-specific: mapping team names to site URLs, channel-to-folder mapping, chat files vs channel files
+- `reference/teams-chat.md` — Posting messages to Teams channels and chats (`m365 teams message send`, `m365 teams chat message send`), HTML formatting, upload-then-announce pattern
 - `reference/sharepoint.md` — Broader SPO surface: folders, lists, sites, search beyond file operations
 - `reference/common-errors.md` — Error playbook for the most common `m365` failures
 
